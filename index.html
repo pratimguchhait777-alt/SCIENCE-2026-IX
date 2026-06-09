@@ -77,7 +77,6 @@
         }
         .xp-animate { animation: xpPop 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.3); }
 
-        /* HYPERWAVE HEADER GRADIENT ANIMATION */
         @keyframes auroraBar {
             0% { background-position: 0% 50%; }
             50% { background-position: 100% 50%; }
@@ -129,7 +128,6 @@
             padding: 24px 6%; background: rgba(3, 7, 18, 0.4); backdrop-filter: blur(30px);
             position: sticky; top: 0; z-index: 100; border-bottom: 1px solid var(--pw-border);
         }
-        /* Color-Flow bar underline */
         header::after {
             content: ''; position: absolute; bottom: -1px; left: 0; width: 100%; height: 2px;
             background: linear-gradient(90deg, #6366f1, #a855f7, #ec4899, #6366f1);
@@ -142,6 +140,7 @@
         #welcome-user { font-weight: 700; color: #fff; background: rgba(255,255,255,0.03); border: 1px solid var(--pw-border); padding: 8px 18px; border-radius: 12px; font-size: 0.9rem; }
         .xp-badge { background: linear-gradient(135deg, var(--pw-accent), #4f46e5); color: #fff; padding: 8px 18px; border-radius: 12px; font-weight: 800; font-size: 0.85rem; transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.2); box-shadow: 0 4px 15px rgba(99, 102, 241, 0.2); }
         .admin-badge { background: linear-gradient(135deg, var(--pw-green), #059669); color: #fff; padding: 8px 18px; border-radius: 12px; font-weight: 800; font-size: 0.85rem; display: none; }
+        .sync-indicator { font-size: 0.75rem; font-weight: 700; padding: 8px 14px; border-radius: 12px; background: rgba(255,255,255,0.05); border: 1px solid var(--pw-border); color: var(--text-muted); }
 
         /* --- MANAGEMENT CONTROL ARCHIVE --- */
         #admin-roster-panel {
@@ -197,7 +196,6 @@
         .master-slot-card h3 { font-size: 1.5rem; font-weight: 900; color: #fff; display: flex; align-items: center; gap: 14px; letter-spacing: -0.5px; }
         .master-slot-card h3 span { font-size: 0.75rem; background: rgba(99, 102, 241, 0.12); border: 1px solid rgba(99, 102, 241, 0.25); padding: 5px 14px; border-radius: 10px; color: #a5b4fc; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; }
 
-        /* ULTRA CLEAN ELIMINATE / DELETE BUTTON */
         .btn-delete-slot {
             background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3);
             color: #fca5a5; padding: 8px 16px; border-radius: 10px; cursor: pointer;
@@ -206,7 +204,6 @@
         }
         .btn-delete-slot:hover { background: var(--pw-red); color: #fff; border-color: transparent; box-shadow: 0 5px 15px rgba(239, 68, 68, 0.4); transform: scale(1.05); }
 
-        /* The Tri-Bucket Aesthetic Architecture */
         .sub-slots-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 28px; }
         
         .inner-bucket {
@@ -219,7 +216,6 @@
         
         .inner-bucket h4 { font-size: 1rem; font-weight: 800; color: #fff; margin-bottom: 20px; border-bottom: 1px solid var(--pw-border); padding-bottom: 12px; letter-spacing: -0.2px; }
 
-        /* Micro-Row List Items */
         .content-list { list-style: none; margin-bottom: 20px; }
         .content-item {
             display: flex; justify-content: space-between; align-items: center;
@@ -229,7 +225,6 @@
         }
         .content-item:hover { background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.12); transform: translateX(4px); color: #fff; }
         
-        /* FILE ATTACHMENT ROW MANAGEMENT CRADLE */
         .item-actions-wrapper { display: flex; gap: 8px; align-items: center; }
         .btn-delete-item {
             background: rgba(239, 68, 68, 0.1); border: none; color: #fca5a5; padding: 8px 12px;
@@ -247,7 +242,6 @@
 
         .admin-upload-panel { display: none; margin-top: 15px; }
         
-        /* Glassmorphic Upload Button Controls */
         .native-pdf-label {
             display: block; background: rgba(99, 102, 241, 0.03); color: #a5b4fc; padding: 12px 14px;
             border-radius: 12px; cursor: pointer; font-size: 0.8rem; font-weight: 700; 
@@ -279,6 +273,7 @@
         .close-modal:hover { background: rgb(239, 68, 68); box-shadow: 0 0 25px rgba(239, 68, 68, 0.5); transform: translateY(-1px); }
         #view-frame { width: 100%; height: 100%; border: none; padding-top: 75px; background: #0b0f19; }
     </style>
+    <script src="https://unpkg.com/gun/gun.js"></script>
 </head>
 <body>
 
@@ -294,6 +289,7 @@
     <header>
         <div class="logo">SCIENCE_<span>IX</span></div>
         <div class="user-stats">
+            <span id="sync-status" class="sync-indicator">📡 Hub Connected</span>
             <span id="welcome-user">Connecting Profile...</span>
             <div id="admin-indicator" class="admin-badge">Batch Administrator</div>
             <div id="xp-badge-wrapper" class="xp-badge">✨ <span id="xp-count">0</span> XP</div>
@@ -339,20 +335,46 @@
     </div>
 
     <script>
-        let profilesDB = JSON.parse(localStorage.getItem('neon_matrix_profiles')) || {};
+        // Initialize GunDB P2P synchronization network instance
+        const gun = Gun(['https://gun-manhattan.herokuapp.com/gun']);
+        const cloudDataNode = gun.get('science_ix_global_matrix_v3');
+
+        let profilesDB = {};
+        let appData = { 'phy-slots-target': [], 'chem-slots-target': [], 'bio-slots-target': [] };
         let activeUser = localStorage.getItem('neon_matrix_current_session');
-        let appData = JSON.parse(localStorage.getItem('neon_matrix_data')) || {
-            'phy-slots-target': [],
-            'chem-slots-target': [],
-            'bio-slots-target': []
-        };
         let currentXP = 0;
 
+        // Reactive cloud stream integration mapping listeners
+        cloudDataNode.get('profiles').on((data) => {
+            if(!data) return;
+            try {
+                delete data._;
+                Object.keys(data).forEach(k => {
+                    if(data[k]) profilesDB[k] = JSON.parse(data[k]);
+                });
+                renderStudentRoster();
+                if(activeUser && profilesDB[activeUser.toUpperCase()]) {
+                    currentXP = profilesDB[activeUser.toUpperCase()].xp || 0;
+                    document.getElementById('xp-count').innerText = currentXP;
+                }
+            } catch(e){}
+        });
+
+        cloudDataNode.get('slots').on((data) => {
+            if(!data) return;
+            try {
+                delete data._;
+                Object.keys(appData).forEach(containerId => {
+                    if(data[containerId]) {
+                        appData[containerId] = JSON.parse(data[containerId]);
+                    }
+                });
+                renderEcosystemUI();
+            } catch(e){}
+        });
+
         window.addEventListener('DOMContentLoaded', () => {
-            renderStoredEcosystem();
             if (activeUser) {
-                currentXP = profilesDB[activeUser.toUpperCase()]?.xp || 0;
-                document.getElementById('xp-count').innerText = currentXP;
                 applyIdentityConfig(activeUser);
                 document.getElementById('welcome-screen').style.display = 'none';
             }
@@ -366,11 +388,12 @@
             localStorage.setItem('neon_matrix_current_session', inputName);
 
             if (!profilesDB[keyName]) {
-                profilesDB[keyName] = { name: inputName, xp: 0, joined: new Date().toLocaleDateString() };
-                localStorage.setItem('neon_matrix_profiles', JSON.stringify(profilesDB));
+                const newProfile = { name: inputName, xp: 0, joined: new Date().toLocaleDateString() };
+                cloudDataNode.get('profiles').get(keyName).put(JSON.stringify(newProfile));
+            } else {
+                currentXP = profilesDB[keyName].xp;
+                document.getElementById('xp-count').innerText = currentXP;
             }
-            currentXP = profilesDB[keyName].xp;
-            document.getElementById('xp-count').innerText = currentXP;
             applyIdentityConfig(inputName);
             document.getElementById('welcome-screen').style.opacity = '0';
             setTimeout(() => document.getElementById('welcome-screen').style.display = 'none', 500);
@@ -388,15 +411,17 @@
                 document.getElementById('admin-indicator').style.display = 'inline-block';
                 document.getElementById('admin-roster-panel').style.display = 'block';
                 document.querySelectorAll('.btn-create-slot').forEach(btn => btn.style.display = 'block');
-                renderStudentRoster();
             }
+            renderEcosystemUI();
         }
 
         function renderStudentRoster() {
             const rosterGrid = document.getElementById('roster-grid-target');
+            if(!rosterGrid) return;
             rosterGrid.innerHTML = ""; 
             Object.keys(profilesDB).forEach(key => {
                 const profile = profilesDB[key];
+                if(!profile) return;
                 const card = document.createElement('div');
                 card.className = 'student-profile-card';
                 card.innerHTML = `<strong style="color: #fff;">${profile.name}</strong><br><span style="color: var(--text-muted); font-size:0.85rem;">✨ ${profile.xp} Study XP</span>`;
@@ -404,15 +429,10 @@
             });
         }
 
-        function renderStoredEcosystem() {
-            if (appData['phy-slots-target'].length === 0 && appData['chem-slots-target'].length === 0 && appData['bio-slots-target'].length === 0) {
-                appData['phy-slots-target'].push({ id: "phy-1", title: "Chapter 1: Motion & Kinematics", notes: [], dpps: [], tests: [] });
-                appData['chem-slots-target'].push({ id: "chem-1", title: "Chapter 1: Matter in Our Surrounding", notes: [], dpps: [], tests: [] });
-                appData['bio-slots-target'].push({ id: "bio-1", title: "Chapter 1: The Fundamental Unit of Life", notes: [], dpps: [], tests: [] });
-                localStorage.setItem('neon_matrix_data', JSON.stringify(appData));
-            }
+        function renderEcosystemUI() {
             Object.keys(appData).forEach(containerId => {
                 const targetDiv = document.getElementById(containerId);
+                if(!targetDiv) return;
                 targetDiv.innerHTML = "";
                 appData[containerId].forEach(slot => buildSlotCardDOM(containerId, slot));
             });
@@ -423,19 +443,16 @@
             if (!slotTitle) return;
             const newSlotId = "slot-" + Date.now();
             const newSlotObj = { id: newSlotId, title: slotTitle, notes: [], dpps: [], tests: [] };
+            
             appData[containerId].push(newSlotObj);
-            localStorage.setItem('neon_matrix_data', JSON.stringify(appData));
-            buildSlotCardDOM(containerId, newSlotObj);
+            cloudDataNode.get('slots').get(containerId).put(JSON.stringify(appData[containerId]));
         }
 
         function deleteSlotCard(containerId, slotId) {
-            if (!confirm("Are you completely sure you want to permanently delete this Entire Topic Slot along with all uploaded files? This action cannot be reversed!")) return;
+            if (!confirm("Are you completely sure you want to permanently delete this Entire Topic Slot along with all uploaded files?")) return;
             
             appData[containerId] = appData[containerId].filter(s => s.id !== slotId);
-            localStorage.setItem('neon_matrix_data', JSON.stringify(appData));
-            
-            const DOMElement = document.getElementById(slotId);
-            if (DOMElement) DOMElement.remove();
+            cloudDataNode.get('slots').get(containerId).put(JSON.stringify(appData[containerId]));
         }
 
         function deleteFileItem(containerId, slotId, bucketKey, itemIndex) {
@@ -443,8 +460,7 @@
             const slotIndex = appData[containerId].findIndex(s => s.id === slotId);
             if (slotIndex !== -1) {
                 appData[containerId][slotIndex][bucketKey].splice(itemIndex, 1);
-                localStorage.setItem('neon_matrix_data', JSON.stringify(appData));
-                renderFileItems(containerId, slotId, appData[containerId][slotIndex][bucketKey], `list-${bucketKey}-${slotId}`, bucketKey);
+                cloudDataNode.get('slots').get(containerId).put(JSON.stringify(appData[containerId]));
             }
         }
 
@@ -505,6 +521,7 @@
 
         function renderFileItems(containerId, slotId, itemsArray, listElementId, bucketKey) {
             const listContainer = document.getElementById(listElementId);
+            if(!listContainer) return;
             listContainer.innerHTML = "";
             if (!itemsArray) return;
             const isAdminMode = (activeUser && activeUser.toUpperCase() === "PRATIM");
@@ -540,12 +557,10 @@
                     if (!appData[containerId][slotIndex][bucketKey]) appData[containerId][slotIndex][bucketKey] = [];
                     appData[containerId][slotIndex][bucketKey].push({ name: nameLabel, data: base64Data });
                     
-                    try {
-                        localStorage.setItem('neon_matrix_data', JSON.stringify(appData));
-                        renderFileItems(containerId, slotId, appData[containerId][slotIndex][bucketKey], `list-${bucketKey}-${slotId}`, bucketKey);
-                    } catch (error) {
-                        alert("Storage Limit Exceeded! This PDF is too large for local storage allocation memory. Use a lighter or compressed PDF file.");
-                    }
+                    document.getElementById('sync-status').innerText = "⏳ Uploading...";
+                    cloudDataNode.get('slots').get(containerId).put(JSON.stringify(appData[containerId]), (ack) => {
+                        document.getElementById('sync-status').innerText = "📡 Hub Synced";
+                    });
                 }
             };
             reader.readAsDataURL(file);
@@ -569,8 +584,10 @@
             if (activeUser && activeUser.toUpperCase() !== "PRATIM") {
                 currentXP += 15;
                 document.getElementById('xp-count').innerText = currentXP;
-                profilesDB[activeUser.toUpperCase()].xp = currentXP;
-                localStorage.setItem('neon_matrix_profiles', JSON.stringify(profilesDB));
+                if(profilesDB[activeUser.toUpperCase()]) {
+                    profilesDB[activeUser.toUpperCase()].xp = currentXP;
+                    cloudDataNode.get('profiles').get(activeUser.toUpperCase()).put(JSON.stringify(profilesDB[activeUser.toUpperCase()]));
+                }
                 triggerXPEffect();
             }
         }
